@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+
 public class Controller : MonoBehaviour
 {
     //GameObjects
@@ -46,17 +47,57 @@ public class Controller : MonoBehaviour
         robber.GetComponent<RobberMove>().currentTile=Constants.InitialRobber;           
     }
 
-    public void InitAdjacencyLists()
-    {
-        //Matriz de adyacencia
+    private void InitAdjacencyLists()
+    {   
+        // Matriz de adyacencia
         int[,] matriu = new int[Constants.NumTiles, Constants.NumTiles];
 
-        //TODO: Inicializar matriz a 0's
+        int boardSize = 8;
 
-        //TODO: Para cada posición, rellenar con 1's las casillas adyacentes (arriba, abajo, izquierda y derecha)
+        // Rellenar la matriz de adyacencia
+        for (int i = 0; i < Constants.NumTiles; i++)
+        {
+            int row = i / boardSize;
+            int col = i % boardSize;
 
-        //TODO: Rellenar la lista "adjacency" de cada casilla con los índices de sus casillas adyacentes
+            // Arriba
+            if (row > 0)
+            {
+                matriu[i, i - boardSize] = 1;
+            }
 
+            // Abajo
+            if (row < boardSize - 1)
+            {
+                matriu[i, i + boardSize] = 1;
+            }
+
+            // Izquierda
+            if (col > 0)
+            {
+                matriu[i, i - 1] = 1;
+            }
+
+            // Derecha
+            if (col < boardSize - 1)
+            {
+                matriu[i, i + 1] = 1;
+            }
+        }
+
+        // Pasar la matriz a la lista adjacency de cada Tile
+        for (int i = 0; i < Constants.NumTiles; i++)
+        {
+            tiles[i].adjacency.Clear();
+
+            for (int j = 0; j < Constants.NumTiles; j++)
+            {
+                if (matriu[i, j] == 1)
+                {
+                    tiles[i].adjacency.Add(j);
+                }
+            }
+        }
     }
 
     //Reseteamos cada casilla: color, padre, distancia y visitada
@@ -136,16 +177,41 @@ public class Controller : MonoBehaviour
 
     public void RobberTurn()
     {
-        clickedTile = robber.GetComponent<RobberMove>().currentTile;
+        RobberMove robberMove = robber.GetComponent<RobberMove>();
+
+        // Casilla actual del caco
+        clickedTile = robberMove.currentTile;
         tiles[clickedTile].current = true;
+
+        // Buscar casillas seleccionables para el caco
         FindSelectableTiles(false);
 
-        /*TODO: Cambia el código de abajo para hacer lo siguiente
-        - Elegimos una casilla aleatoria entre las seleccionables que puede ir el caco
-        - Movemos al caco a esa casilla
-        - Actualizamos la variable currentTile del caco a la nueva casilla
-        */
-        robber.GetComponent<RobberMove>().MoveToTile(tiles[robber.GetComponent<RobberMove>().currentTile]);
+        // Guardar las casillas seleccionables en una lista
+        List<int> selectableTiles = new List<int>();
+
+        for (int i = 0; i < tiles.Length; i++)
+        {
+            if (tiles[i].selectable)
+            {
+                selectableTiles.Add(i);
+            }
+        }
+
+        // Si no hay casillas seleccionables, no hacemos nada
+        if (selectableTiles.Count == 0)
+        {
+            return;
+        }
+
+        // Elegir una casilla aleatoria
+        int randomIndex = Random.Range(0, selectableTiles.Count);
+        int newTileIndex = selectableTiles[randomIndex];
+
+        // Mover al caco a esa casilla
+        robberMove.MoveToTile(tiles[newTileIndex]);
+
+        // Actualizar currentTile del caco
+        robberMove.currentTile = newTileIndex;
     }
 
     public void EndGame(bool end)
