@@ -197,21 +197,55 @@ public class Controller : MonoBehaviour
             }
         }
 
-        // Si no hay casillas seleccionables, no hacemos nada
+        // Si no hay casillas seleccionables, el ladrón pierde el turno
         if (selectableTiles.Count == 0)
         {
+            FinishTurn();
             return;
         }
 
-        // Elegir una casilla aleatoria
-        int randomIndex = Random.Range(0, selectableTiles.Count);
-        int newTileIndex = selectableTiles[randomIndex];
+        int cop0Tile = cops[0].GetComponent<CopMove>().currentTile;
+        int cop1Tile = cops[1].GetComponent<CopMove>().currentTile;
 
-        // Mover al caco a esa casilla
-        robberMove.MoveToTile(tiles[newTileIndex]);
+        int bestTileIndex = selectableTiles[0];
+        int bestMinimumDistance = -1;
+        int bestTotalDistance = -1;
+
+        for (int i = 0; i < selectableTiles.Count; i++)
+        {
+            int candidateTile = selectableTiles[i];
+
+            // Evitamos que el ladrón elija voluntariamente una casilla ocupada por un policía
+            if (candidateTile == cop0Tile || candidateTile == cop1Tile)
+            {
+                continue;
+            }
+
+            int distanceToCop0 = GetDistanceBetweenTiles(candidateTile, cop0Tile);
+            int distanceToCop1 = GetDistanceBetweenTiles(candidateTile, cop1Tile);
+
+            // Nos interesa maximizar la distancia al policía más cercano
+            int minimumDistance = Mathf.Min(distanceToCop0, distanceToCop1);
+
+            // Criterio secundario para desempatar:
+            // si dos casillas tienen la misma distancia mínima,
+            // elegimos la que tenga mayor distancia total a ambos policías.
+            int totalDistance = distanceToCop0 + distanceToCop1;
+
+            if (minimumDistance > bestMinimumDistance ||
+                minimumDistance == bestMinimumDistance && totalDistance > bestTotalDistance)
+            {
+                bestMinimumDistance = minimumDistance;
+                bestTotalDistance = totalDistance;
+                bestTileIndex = candidateTile;
+            }
+        }
+
+        // Mover al caco a la mejor casilla encontrada
+        robberMove.MoveToTile(tiles[bestTileIndex]);
 
         // Actualizar currentTile del caco
-        robberMove.currentTile = newTileIndex;
+        robberMove.currentTile = bestTileIndex;
     }
 
     public void EndGame(bool end)
@@ -252,38 +286,118 @@ public class Controller : MonoBehaviour
         rounds.text = "Rounds: " + roundCount;
     }
 
+    private int GetDistanceBetweenTiles(int startIndex, int targetIndex)
+    {
+        bool[] visited = new bool[Constants.NumTiles];
+        int[] distance = new int[Constants.NumTiles];
+
+        Queue<int> nodes = new Queue<int>();
+
+        visited[startIndex] = true;
+        distance[startIndex] = 0;
+        nodes.Enqueue(startIndex);
+
+        while (nodes.Count > 0)
+        {
+            int currentIndex = nodes.Dequeue();
+
+            if (currentIndex == targetIndex)
+            {
+                return distance[currentIndex];
+            }
+
+            foreach (int adjacentIndex in tiles[currentIndex].adjacency)
+            {
+                if (visited[adjacentIndex] == false)
+                {
+                    visited[adjacentIndex] = true;
+                    distance[adjacentIndex] = distance[currentIndex] + 1;
+                    nodes.Enqueue(adjacentIndex);
+                }
+            }
+        }
+
+        // En principio no debería ocurrir en un tablero conectado,
+        // pero devolvemos un valor alto por seguridad.
+        return int.MaxValue;
+    }
+
     public void FindSelectableTiles(bool cop)
     {
-                 
-        int indexcurrentTile;        
+        int indexcurrentTile;
 
-        if (cop==true)
+        if (cop == true)
             indexcurrentTile = cops[clickedCop].GetComponent<CopMove>().currentTile;
         else
             indexcurrentTile = robber.GetComponent<RobberMove>().currentTile;
 
-        //La ponemos rosa porque acabamos de hacer un reset
+        // La ponemos rosa porque acabamos de hacer un reset
         tiles[indexcurrentTile].current = true;
 
-        //Cola para el BFS
+        // Cola para el BFS
         Queue<Tile> nodes = new Queue<Tile>();
 
-        //TODO: Implementar BFS. Los nodos seleccionables los ponemos como selectable=true
-        //Tendrás que cambiar este código por el BFS
-        for(int i = 0; i < Constants.NumTiles; i++)
+        Tile startTile = tiles[indexcurrentTile];
+
+        startTile.visited = true;
+        startTile.distance = 0;
+        startTile.parent = null;
+
+        nodes.Enqueue(startTile);
+
+        // Si se está moviendo un policía, la casilla del otro policía queda bloqueada
+        int blockedTile = -1;
+
+        if (cop == true)
         {
-            tiles[i].selectable = true;
+            int otherCop;
+
+            if (clickedCop == 0)
+                otherCop = 1;
+            else
+                otherCop = 0;
+
+            blockedTile = cops[otherCop].GetComponent<CopMove>().currentTile;
         }
 
+        while (nodes.Count > 0)
+        {
+            Tile currentTile = nodes.Dequeue();
 
+            // Si ya hemos llegado a la distancia máxima, no expandimos más
+            if (currentTile.distance >= Constants.Distance)
+                continue;
+
+            foreach (int adjacentIndex in currentTile.adjacency)
+            {
+                // Un policía no puede pasar por la casilla ocupada por el otro policía
+                if (cop == true && adjacentIndex == blockedTile)
+                    continue;
+
+                Tile adjacentTile = tiles[adjacentIndex];
+
+                if (adjacentTile.visited == false)
+                {
+                    adjacentTile.visited = true;
+                    adjacentTile.parent = currentTile;
+                    adjacentTile.distance = currentTile.distance + 1;
+
+                    // Evitamos que una ficha pueda moverse a su casilla actual
+                    if (adjacentTile.numTile != indexcurrentTile)
+                        adjacentTile.selectable = true;
+
+                    nodes.Enqueue(adjacentTile);
+                }
+            }
+        }
     }
-    
-   
-    
 
-    
 
-   
 
-       
+
+
+
+
+
+
 }
